@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, height=device-height, user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
+		<meta name="format-detection" content="telephone=no">
+		<title>LayIM 移动版</title>
+
+		
+		<style>
+			/*        .layui-layim-tab li {
+            width: 100%
+        }
+        .layim-list-top li[layim-event="newFriend"] {
+            display: none;
+        }*/
+		</style>
+		
+		
+
+		<link rel="stylesheet" href="../../src/css/layui.mobile.css">
+		<link rel="stylesheet" href="../../src/css/layui.css">
+			
+		<script src='hxsdk/webim.config.js'></script>
+		<script src='hxsdk/strophe-1.2.8.min.js'></script>
+		<script src='hxsdk/websdk-1.4.13.js'></script>
+		<script src="../../src/layui.js"></script>
+		<script src="../../src/lay/jquery-1.11.1.min.js"></script>
+	</head>
+
+	<body>
+
+		
+			
+		<script>
+
+			//全局环信链接，方便layim-mobile内部使用
+			var easemobConn;
+            var loginUser = prompt("请输入登录帐号", "wj"); //"wj";
+
+			layui.config({
+				version: true
+			}).use('mobile', function() {
+				var mobile = layui.mobile,
+					layim = mobile.layim,
+					layer = mobile.layer;
+
+				//好友列表
+				var friends = [{
+					"groupname": "联系人",
+					"id": 1,
+					"list": []
+				}];
+				//环信用户信息
+				var options = {
+					apiUrl: WebIM.config.apiURL,
+					user: 'glj',
+					pwd: 'glj',
+					appKey: WebIM.config.appkey
+				};
+				//var name = prompt("Please enter your name", "");
+				var name = loginUser;
+				if(name != null && name != "") {
+					options.user = name;
+					options.pwd = name
+				}
+				//默认头像图片
+				var friendAvatar = "images/avatar.jpg";
+				var groupAvatar = "images/group.jpg";
+
+				//环信链接配置
+				easemobConn = new WebIM.connection({
+					isMultiLoginSessions: WebIM.config.isMultiLoginSessions,
+					https: typeof WebIM.config.https === 'boolean' ? WebIM.config.https : location.protocol === 'https:',
+					url: WebIM.config.xmppURL,
+					heartBeatWait: WebIM.config.heartBeatWait,
+					autoReconnectNumMax: WebIM.config.autoReconnectNumMax,
+					autoReconnectInterval: WebIM.config.autoReconnectInterval,
+					apiUrl: WebIM.config.apiURL,
+					isAutoLogin: true
+				});
+
+				//环信监听
+				easemobConn.listen({
+					onOpened: function(message) { //连接成功回调
+						//好友信息
+						easemobConn.getRoster({
+							success: function(roster) {
+								for(var i = 0, l = roster.length; i < l; i++) {
+									var ros = roster[i];
+									if(ros.subscription === 'both' || ros.subscription === 'to') {
+										layim.addList({
+											type: 'friend',
+											username: ros.name,
+											id: ros.name,
+											groupid: 1,
+											avatar: friendAvatar
+										});
+									}
+								}
+							}
+						});
+						//所有群组
+						easemobConn.getGroup({
+							success: function(resp) {
+								for(g of resp.data) {
+									layim.addList({
+										type: 'group' //列表类型，只支持friend和group两种
+											,
+										avatar: groupAvatar //群组头像
+											,
+										groupname: g.groupname //群组名称
+											,
+										id: g.groupid //群组id
+									})
+								}
+							}
+						});
+					},
+					onClosed: function(message) {}, //连接关闭回调
+					onTextMessage: function(message) {
+						receivedMsg(message);
+					}, //收到文本消息
+					onEmojiMessage: function(message) {}, //收到表情消息
+					onPictureMessage: function(message) {
+						receivedMsg(message);
+					}, //收到图片消息
+					onCmdMessage: function(message) {}, //收到命令消息
+					onAudioMessage: function(message) {}, //收到音频消息
+					onLocationMessage: function(message) {}, //收到位置消息
+					onFileMessage: function(message) {
+						receivedMsg(message);
+					}, //收到文件消息
+					onVideoMessage: function(message) {
+						var node = document.getElementById('privateVideo');
+						var option = {
+							url: message.url,
+							headers: {
+								'Accept': 'audio/mp4'
+							},
+							onFileDownloadComplete: function(response) {
+								var objectURL = WebIM.utils.parseDownloadResponse.call(easemobConn, response);
+								node.src = objectURL;
+							},
+							onFileDownloadError: function() {
+								console.log('File down load error.')
+							}
+						};
+						WebIM.utils.download.call(easemobConn, option);
+					}, //收到视频消息
+					onPresence: function(message) {//处理“广播”或“发布-订阅”消息，如联系人订阅请求、处理群组、聊天室被踢解散等消息
+                        solveOnPresence(message);//当接收到添加好友等等的处理方法
+					},
+					onRoster: function(message) {//处理好友申请,已经发出请求，发出人的回调
+                        solveOnRoster(message);
+					},
+					onInviteMessage: function(message) {}, //处理群组邀请
+					onOnline: function() {}, //本机网络连接成功
+					onOffline: function() {}, //本机网络掉线
+					onError: function(message) {}, //失败回调
+					onBlacklistUpdate: function(list) { //黑名单变动
+						// 查询黑名单，将好友拉黑，将好友从黑名单移除都会回调这个函数，list则是黑名单现有的所有好友信息
+						console.log(list);
+					},
+					onReceivedMessage: function(message) {}, //收到消息送达服务器回执
+					onDeliveredMessage: function(message) {}, //收到消息送达客户端回执
+					onReadMessage: function(message) {}, //收到消息已读回执
+					onCreateGroup: function(message) {}, //创建群组成功回执（需调用createGroupNew）
+					onMutedMessage: function(message) {} //如果用户在A群组被禁言，在A群发消息会走这个回调并且消息不会传递给群其它成员
+				});
+
+				var receivedMsg = function(message) {
+					if(options.user == message.from) return; //防止发送群消息时，会再次给直接发送一条
+					//创建一个会话
+					var isGroupChat = message.type == "groupchat";
+					layim.getMessage({
+						username: message.from //消息来源用户名
+							,
+						avatar: friendAvatar //消息来源用户头像
+							,
+						id: isGroupChat ? message.to : message.from //消息的来源ID（如果是私聊，则是用户id，如果是群聊，则是群组id）
+							,
+						type: isGroupChat ? "group" : "friend" //聊天窗口来源类型，从发送消息传递的to里面获取
+							,
+						content: message.data //消息内容
+							// ,cid: 0 //消息id，可不传。除非你要对消息进行一些操作（如撤回）
+							,
+						mine: false //是否我发送的消息，如果为true，则会显示在右方
+							// ,fromid: "100000" //消息的发送者id（比如群组中的某个消息发送者），可用于自动解决浏览器多窗口时的一些问题
+							,
+						timestamp: new Date().getTime() //服务端时间戳毫秒数。注意：如果你返回的是标准的 unix 时间戳，记得要 *1000
+					});
+				}
+				//环信单聊发送文本消息
+				var sendPrivateText = function(isGroupChat, to, message) {
+					var id = easemobConn.getUniqueId(); // 生成本地消息id
+					var msg = new WebIM.message('txt', id); // 创建文本消息
+					msg.set({
+						msg: message, // 消息内容
+						to: to, // 接收消息对象（用户id）
+						roomType: false,
+						chatType: 'chatRoom',
+						success: function(id, serverMsgId) {
+							console.log('send private text Success');
+						},
+						fail: function(e) {
+							console.log("Send private text error");
+						}
+					});
+					if(isGroupChat) {
+						msg.setGroup('groupchat');
+					} else {
+						msg.body.chatType = 'singleChat';
+					}
+					easemobConn.send(msg.body);
+				};
+
+				layim.on('sendMessage', function(res) {
+					var mine = res.mine; //包含我发送的消息及我的信息
+					/*            codelayui.code
+					//mine的结构如下：
+					            {
+					                avatar: "avatar.jpg" //我的头像
+					                    ,content: "你好吗" //消息内容
+					                ,id: "100000" //我的id
+					                ,mine: true //是否我发送的消息
+					                ,username: "纸飞机" //我的昵称
+					            }*/
+					var to = res.to; //对方的信息
+					/*            codelayui.code
+					//to的结构如下：
+					            {
+					                avatar: "avatar.jpg"
+					                    ,id: "100001"
+					                ,name: "贤心"
+					                ,sign: "这些都是测试数据，实际使用请严格按照该格式返回"
+					                ,type: "friend" //聊天类型，一般分friend和group两种，group即群聊
+					                ,username: "贤心"
+					            }
+					            //监听到上述消息后，就可以轻松地发送socket了，如：
+					            socket.send(JSON.stringify({
+					                type: 'chatMessage' //随便定义，用于在服务端区分消息类型
+					                ,data: res
+					            }));*/
+					var isGroupChat = to.type == "group";
+					sendPrivateText(isGroupChat, isGroupChat ? to.id : to.name, mine.content);
+				});
+
+				layim.config({
+					init: {
+						//我的信息
+						mine: {
+							"username": options.user //我的昵称
+								,
+							"id": options.user //我的ID
+								,
+							"avatar": friendAvatar //我的头像
+						}
+						//我的好友列表
+						,
+						friend: friends
+					},
+					easemobImage: {
+						url: ''
+					},
+					easemobFile: {
+						url: ''
+					}
+					//,tabIndex: 1 //用户设定初始打开的Tab项下标
+					//,isNewFriend: false //是否开启“新的朋友”
+					,
+					isgroup: true //是否开启“群聊”
+						//,chatTitleColor: '#c00' //顶部Bar颜色
+						,
+					title: '聊天' //应用名，默认：我的IM
+				});
+				//环信登陆链接
+				easemobConn.open(options);
+			});
+		</script>
+
+
+	</body>
+
+
+
+<script>
+    //以下是 添加 好友 和 群组的js
+
+    var layer ;// 全局使用 上面定义的非全局 无法使用
+    layui.use('layer', function(){
+        layer = layui.layer;
+    });
+
+    /**********************   好友添加开始  ************************/
+
+    //点击 添加好友 javascript的方式appendChild反映过慢，需要用jquery的append方式
+    function appendAddNewFriend() {
+        var appendHtmlflag = document.getElementById("searchUserInput");
+        if(!appendHtmlflag){//说明是第一次点击
+            var appendHtml="<div class='layui-form-item' style='margin: 10px;'>" +
+                "<label class='layui-form-label'>用户：</label>" +
+                "<div class='layui-input-block'><input id='searchUserInput' class='layui-input'  style='margin: 5px;'/></div>" +
+                "<label class='layui-form-label'>验证信息：</label>" +
+                "<div class='layui-input-block'><input id='searchUserMeaage'  class='layui-input' style='margin: 5px;' /></div>"+
+                "<button class='layui-btn layui-btn-normal' style='margin: 5px;float: right;' onclick='addNewFriendUser()'>添加</button>" +
+                "</div>";
+            $("#addNewFriend").append(appendHtml);
+        }else{//第二次点击 实现折叠效果
+            $("#addNewFriend").html("");
+        }
+
+    }
+
+    function  addNewFriendUser(){ //点击 添加好友
+//  layer.msg('请选择一条数据！', {icon: 5});
+
+        // 5 哭 4 锁 3问号 2 差号 1 对好
+            //layer.msg('不开心。。', {icon: 5});
+            /*
+            layer.open({
+                type: 1,
+                content: '哈哈哈' //这里content是一个普通的String
+            });*/
+
+        var searchUserInput = document.getElementById("searchUserInput").value;//用户
+        var searchUserMeaage = document.getElementById("searchUserMeaage").value;//验证信息
+        if(searchUserInput){//有值
+			if(searchUserInput.trim().length>0){//不是空格
+				var msg = "添加好友";
+				if(searchUserMeaage){
+				    if(searchUserMeaage.length>15){
+                        layer.msg('验证信息不能超过15个字！');
+				        return;
+					}
+                    msg = searchUserMeaage;
+				}
+               easemobConn.subscribe({
+                    to: searchUserInput,
+                    message: msg//添加好友的验证信息
+                });
+                layer.msg('好友请求已经发出！');
+			}else{
+                layer.msg('请输入要添加的好友！');
+			}
+		}else{
+            layer.msg('请输入要添加的好友！');
+		}
+
+    }
+
+	function solveOnRoster(message) {//当发出请求的时候
+		if(message[0].ask=="subscribe"){//说明是添加好友已经发出,对方已经收到
+            //对方处理了好友请求
+            var subscription = message[0].subscription;
+            if(subscription=="none"){
+                //alert("好友添加请求 已经送达!");
+			}else if(subscription=="from"){//说明是 别人 添加自己 为 好友 自己同意后的反馈！
+                layer.alert('你和'+message[0].name+"已经是好友了！", {icon: 1});
+				/****************************************************/
+                /* 重新加载页面 暂时没有处理  *******************************/
+			}
+
+		}
+
+    }
+
+    //同意添加好友
+    function agreeAddUser(fromUser) {
+        easemobConn.subscribed({
+            to: fromUser,
+            message : '[resp:true]'
+        });
+        easemobConn.subscribe({//需要反向添加对方好友
+            to: fromUser,
+            message : '[resp:true]'
+        });
+        layer.closeAll();
+    }
+    //拒绝添加好友
+
+	function refuses(fromUser) {
+		easemobConn.unsubscribed({
+			to: fromUser,
+			message : 'rejectAddFriend'
+		});
+	}
+    function refuseAddUser(fromUser) { // layui 弹出框 和 拒绝添加好友的请求 排斥 的解决方法 只能 分开两个方法
+	    layer.closeAll();
+        layer.alert('你拒绝了'+fromUser+'的添加好友请求！', {icon: 5});
+        setTimeout("refuses(\""+fromUser+"\")",1000);
+    }
+    //当接收到添加好友等等的处理方法
+    function solveOnPresence(message) {
+		/* 当收到		添加好友	的请求的时候 */
+        if(message.type=="subscribe"){//处理添加自己为好友的请求
+            var fromUser = message.from;//请求人
+			var status = message.status;//[resp:true]的时候为同意好友添加
+            if(status=="[resp:true]"){//说明是添加好友后，对方同意后反向添加自己为好友
+                easemobConn.subscribed({
+                    to: fromUser,
+                    message : '[resp:true]'
+                });
+                layer.alert('你和'+fromUser+'已经是好友了！', {icon: 1});
+			}else{
+                var tips = fromUser+"请求添加你为好友，是否同意?";
+				var htmlContent = '<div style="">' +
+                     '<br/><p style="color: #007DDB;">验证信息：<span style="color: black;">'+status+'</span></p><br/><hr/>' +
+                     '<button class="layui-btn layui-btn-normal" style="float: right;margin: 10px;" onclick="agreeAddUser(\''+fromUser+'\')" >同意</button>' +
+                     '<button class="layui-btn layui-btn-danger" style="float: right;margin: 10px;" onclick="refuseAddUser(\''+fromUser+'\');">拒绝</button>'+
+                     '</div>';
+                 layer.open({
+                     type:1,
+                     title: tips,
+                     content: htmlContent
+                 });
+            }
+		}
+    }
+    /**********************   好友添加结束  ************************/
+
+
+
+    /**********************   添加群组开始  ************************/
+    //点击 加入群组
+    function addNewGroup() {
+        var appendHtmlflag = document.getElementById("searchGroupInput");
+        if(!appendHtmlflag){//说明是第一次点击
+            var appendHtml="<div id='appendGroupHtml' class='layui-form-item' style='margin: 10px;'>" +
+                "<label class='layui-form-label'>群ID：</label>" +
+                "<div class='layui-input-block'><input id='searchGroupInput' value='37749810855938' class='layui-input'  style='margin: 5px;'/></div>" +
+                "<button class='layui-btn layui-btn-normal' style='margin: 5px;float: right;' onclick='searchGroup()'>搜索</button>" +
+                "</div>";
+            $("#addNewGroup").append(appendHtml);
+        }else{//第二次点击 实现折叠效果
+            $("#addNewGroup").html("");
+            $("#showGroupInfo").html("");
+        }
+    }
+    function searchGroup() {
+        var searchGroupValue = document.getElementById("searchGroupInput").value;
+        if(searchGroupValue){
+            if(searchGroupValue.trim().length>0){
+                var groupInfoOptions = {
+                    groupId: searchGroupValue,
+                    success: function(resp){
+                        //console.log("Response: ", resp);
+                        if(resp.data!=null && resp.data.length>0){
+                            var groupInfo =  resp.data[0];
+                            //清除以前的
+                            var removeDom = document.getElementById("appendGroupInfoHtml");
+                            if(removeDom){//第二次点击
+                                removeDom.remove();
+                            }
+                            var appendHtml = "<div id='appendGroupInfoHtml' class='layui-form-item' style='margin: 5px;border-top: 1px solid #E2E2E2; '>"+
+                                "<h3>群信息 [ <span id='groupInfoid'>"+groupInfo.id+"</span> ]</h3>"+
+                                "<label class='layui-form-label'>群名字：</label>" +
+                                "<div class='layui-input-block'><input disabled='disabled'  value='"+groupInfo.name+"' class='layui-input'  style='margin: 5px;'/></div>" +
+                                "<label class='layui-form-label'>描述：</label>" +
+                                "<div class='layui-input-block'><input disabled='disabled'  value='"+groupInfo.description+"' class='layui-input'  style='margin: 5px;'/></div>" +
+                                //"<hr/><label class='layui-form-label'>验证信息：</label>" +
+                                //"<div class='layui-input-block'><input id='searchUserMeaage'  class='layui-input' style='margin: 5px;' /></div>"+
+                                "<button class='layui-btn layui-btn-normal' style='margin: 5px;float: right;' onclick='joinGroup()'>申请加入</button>"
+                                +"</div>";
+                            $("#showGroupInfo").append(appendHtml);
+                        }
+                    },
+                    error: function(){//如果是非公开 群只有 管理人员 才有权限
+                        var removeDom = document.getElementById("appendGroupInfoHtml");
+                        if(removeDom){//搜索不到清除以前的信息
+                            removeDom.remove();
+                        }
+                        layer.msg('未搜到相关信息，该群可能不是公开群！');
+                    }
+                };
+                easemobConn.getGroupInfo(groupInfoOptions);
+
+            }else{
+                layer.msg('请输入要加入的群组！');
+            }
+        }else{
+            layer.msg('请输入要加入的群组！');
+        }
+    }
+
+    function joinGroup() {
+        var groupInfoid = $("#groupInfoid").text();
+        if(groupInfoid){
+            /* var addGroupMembers = function () {
+                 var option = {
+                     list: [loginUser],
+                     roomId: groupInfoid
+                 };
+                 easemobConn.addGroupMembers(option);
+             };*/
+            layer.alert('已经发出申请！', {icon: 1});
+        }
+    }
+    /**********************   添加群组结束  ************************/
+
+
+
+</script>
+
+
+
+
+</html>
