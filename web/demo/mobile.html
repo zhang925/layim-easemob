@@ -38,13 +38,13 @@
 			//全局环信链接，方便layim-mobile内部使用
 			var easemobConn;
             var loginUser = prompt("请输入登录帐号", "wj"); //"wj";
-
+            var layim;
 			layui.config({
 				version: true
 			}).use('mobile', function() {
-				var mobile = layui.mobile,
-					layim = mobile.layim,
-					layer = mobile.layer;
+				var mobile = layui.mobile;
+                var	layer = mobile.layer;
+                layim = mobile.layim;
 
 				//好友列表
 				var friends = [{
@@ -150,15 +150,17 @@
 						WebIM.utils.download.call(easemobConn, option);
 					}, //收到视频消息
 					onPresence: function(message) {//处理“广播”或“发布-订阅”消息，如联系人订阅请求、处理群组、聊天室被踢解散等消息
-                        solveOnPresence(message);//当接收到添加好友等等的处理方法
+						solveOnPresence(message);//当接收到添加好友等等的处理方法
 					},
 					onRoster: function(message) {//处理好友申请,已经发出请求，发出人的回调
                         solveOnRoster(message);
 					},
-					onInviteMessage: function(message) {}, //处理群组邀请
+					onInviteMessage: function(message) {//处理群组邀请
+                        solveOnInviteMessage(message);
+					},
 					onOnline: function() {}, //本机网络连接成功
 					onOffline: function() {}, //本机网络掉线
-					onError: function(message) {}, //失败回调
+					onError: function(message) {alert("失败回调！")}, //失败回调
 					onBlacklistUpdate: function(list) { //黑名单变动
 						// 查询黑名单，将好友拉黑，将好友从黑名单移除都会回调这个函数，list则是黑名单现有的所有好友信息
 						console.log(list);
@@ -275,6 +277,52 @@
 						,
 					title: '聊天' //应用名，默认：我的IM
 				});
+
+
+                //查看群的信息
+                layim.on('detail', function (data) {
+                    var username = layim.cache().mine.username;
+                    var pageNum = 1,
+                        pageSize = 1000;
+                    var options = {
+                        pageNum: pageNum,
+                        pageSize: pageSize,
+                        groupId: data.id,
+                        success: function (resp) {
+                            var isOwner = false;
+                            for (member of resp.data) {
+                                isOwner = username == member.owner;
+                            }
+                            //显示群组人员的方法
+                            //var detailTitle = data.groupname+"-"+data.id;
+                            var detailTitle = data.groupname;
+                            layim.panel({
+                                title: detailTitle//标题
+                                , tpl: '<ul class="layim-list-top">\n' +
+                                (isOwner ? '<li layim-event="newMember"><i onclick="addUserFromGroup(\'{{item.member||item.owner}}\',\''+data.id+'\')" class="layui-icon">&#xe654;</i>新的成员</li>' : '') +
+                                '{{# layui.each(d.data, function(index, item){ }}\n' +
+                                '  <li>\n' +
+                                '  <i style="font-size: 35px;" class="layui-icon">&#xe612;</i>' +
+                                '<span>{{item.member||item.owner}}</span>' +
+                                //'   <i style="font-size: 35px;" class="layui-icon">&#x1006;</i>' +
+                                //'<i style="font-size: 35px;position: absolute; right: 0; top: 0;" class="layui-icon"  >&#x1007;</i>' +
+
+                                (isOwner ? '<button onclick="removeUserFromGroup(\'{{item.member||item.owner}}\',\''+data.id+'\')" class="layui-btn layui-btn-danger" style="float: right;margin: 2px;">移 除</button>' : '') +
+
+
+
+                                '  </li>\n' +
+                                '{{#  }); }}\n' +
+                                '</ul>' //模版，基于laytpl语法
+                                , data: resp.data
+                            });
+                        },
+                    };
+                    easemobConn.listGroupMember(options);
+                });
+
+
+
 				//环信登陆链接
 				easemobConn.open(options);
 			});
@@ -292,6 +340,19 @@
     layui.use('layer', function(){
         layer = layui.layer;
     });
+
+    function removeUserFromGroup(removeuser,groupid) {//管理员从 群组中 踢出 人
+        var tips = "是否将"+removeuser+"移除该群？";
+        layer.confirm(tips, {
+            btn: ['确定', '取消']
+        }, function(index, layero){
+            layer.alert(removeuser+"已被移除该群！",{icon:5});
+        });
+    }
+
+    function addUserFromGroup(removeuser,groupid) {
+        layer.alert(removeuser+"已加入该群！",{icon:1});
+    }
 
     /**********************   好友添加开始  ************************/
 
@@ -351,18 +412,46 @@
     }
 
 	function solveOnRoster(message) {//当发出请求的时候
-		if(message[0].ask=="subscribe"){//说明是添加好友已经发出,对方已经收到
-            //对方处理了好友请求
+
+
+        var msg = message[0];
+		var ask = msg.ask;
+        if (!ask){
+            switch (msg.subscription) {
+                case "to"://添加好友
+                    layim.addList({
+                        type: 'friend',
+                        username: msg.name,
+                        id: msg.name,
+                        groupid: 1
+                    });
+                    break;
+                case "remove"://移除好友
+                    layim.removeList({
+                        type: 'friend' //或者group
+                        , id: msg.name //好友或者群组ID
+                    });
+                    break;
+                case "none":
+                    layer.alert(msg.name+"拒绝了你的好友添加申请！",{icon: 5});
+                    break;
+            }
+        }if(ask=="subscribe"){ //这个是 用来 判断 同意好友 添加的那一方 同意 之后的提醒
             var subscription = message[0].subscription;
             if(subscription=="none"){
                 //alert("好友添加请求 已经送达!");
-			}else if(subscription=="from"){//说明是 别人 添加自己 为 好友 自己同意后的反馈！
+            }else if(subscription=="from"){//说明是 别人 添加自己 为 好友 自己同意后的反馈！
                 layer.alert('你和'+message[0].name+"已经是好友了！", {icon: 1});
-				/****************************************************/
-                /* 重新加载页面 暂时没有处理  *******************************/
-			}
-
+                // 重新加载页面
+                layim.addList({
+                    type: 'friend',
+                    username: msg.name,
+                    id: msg.name,
+                    groupid: 1
+                });
+            }
 		}
+
 
     }
 
@@ -393,8 +482,9 @@
     }
     //当接收到添加好友等等的处理方法
     function solveOnPresence(message) {
-		/* 当收到		添加好友	的请求的时候 */
-        if(message.type=="subscribe"){//处理添加自己为好友的请求
+
+        if(message.type=="subscribe"){/* 当收到		添加好友	的请求的时候 */
+            //处理添加自己为好友的请求
             var fromUser = message.from;//请求人
 			var status = message.status;//[resp:true]的时候为同意好友添加
             if(status=="[resp:true]"){//说明是添加好友后，对方同意后反向添加自己为好友
@@ -416,7 +506,41 @@
                      content: htmlContent
                  });
             }
+		}else if(message.type=="memberJoinPublicGroupSuccess"){//有人加入 公共群 自己是管理员 通知消息
+			//查询 群信息 多个人 同时加入 是 一条一条 的 推送的
+            var gid = message.from;
+            var groupInfoOptions = {
+                groupId: gid,//群 ID
+                success: function(resp){
+                    console.log(groupInfo);
+                    var groupInfo =  resp.data[0];
+                    var joinUser = message.mid;
+                    layer.alert("<span style='color: red;'>"+joinUser+"</span> 加入了群：<span style='color: blue;'>"+groupInfo.name+"</span>", {icon: 1});
+                }
+            };
+            easemobConn.getGroupInfo(groupInfoOptions);
+
+		}else if(message.type=="unavailable" && message.original_type =="unavailable"){//退群操作
+            //提示
+			var gid = message.from;
+			var groupInfoOptions = {
+                groupId: gid,//群 ID
+                success: function(resp){
+                    var groupInfoName =  resp.data[0].name;
+					var exitUser = message.fromJid;//退群人
+                    exitUser = exitUser.substring(exitUser.lastIndexOf("/")+1,exitUser.length) ;
+                    if(exitUser == loginUser){//当前登录人被推出了
+                        exitUser = "你";
+					}
+					var tips = "<span style='color: red;'>"+exitUser+"</span>退出了群：<span style='color: blue;'>"+groupInfoName+"</span>";
+                    layer.alert(tips, {icon: 5});
+                }
+            };
+            easemobConn.getGroupInfo(groupInfoOptions);
+		}else if(1==2){//其他 判断继续添加
+
 		}
+
     }
     /**********************   好友添加结束  ************************/
 
@@ -438,7 +562,8 @@
             $("#showGroupInfo").html("");
         }
     }
-    function searchGroup() {
+
+    function searchGroup() {//搜索 公开群组
         var searchGroupValue = document.getElementById("searchGroupInput").value;
         if(searchGroupValue){
             if(searchGroupValue.trim().length>0){
@@ -461,7 +586,7 @@
                                 "<div class='layui-input-block'><input disabled='disabled'  value='"+groupInfo.description+"' class='layui-input'  style='margin: 5px;'/></div>" +
                                 //"<hr/><label class='layui-form-label'>验证信息：</label>" +
                                 //"<div class='layui-input-block'><input id='searchUserMeaage'  class='layui-input' style='margin: 5px;' /></div>"+
-                                "<button class='layui-btn layui-btn-normal' style='margin: 5px;float: right;' onclick='joinGroup()'>申请加入</button>"
+                                "<button  class='layui-btn layui-btn-normal' style='margin: 5px;float: right;' onclick='joinGroup()'>申请加入</button>"
                                 +"</div>";
                             $("#showGroupInfo").append(appendHtml);
                         }
@@ -484,19 +609,43 @@
         }
     }
 
-    function joinGroup() {
+    function joinGroup() { //此方法 加入 群组 是针对 当前登录人 加入群组的
         var groupInfoid = $("#groupInfoid").text();
         if(groupInfoid){
-            /* var addGroupMembers = function () {
-                 var option = {
-                     list: [loginUser],
-                     roomId: groupInfoid
-                 };
-                 easemobConn.addGroupMembers(option);
-             };*/
+            var addGroupOption = {
+                list: [loginUser],
+                roomId: groupInfoid
+            };
+            easemobConn.addGroupMembers(addGroupOption);
             layer.alert('已经发出申请！', {icon: 1});
         }
     }
+    function solveOnInviteMessage(message) {//当前登陆人 收到 加入群组的处理
+		alert("solveOnInviteMessage");
+		console.log("solveOnInviteMessage");
+        var groupInfoOptions = {
+            groupId: message.roomid,//群 ID
+            success: function(resp){
+                if(message.type=="invite"){//加入公开群组
+                    var tips = "你已加入群：<span>"+resp.data[0].name+"</span>";
+                    layer.alert(tips, {icon: 1});
+                }else if(message.type=="leaveGroup"){// 推出群
+                    var tips = "你已退出群：<span>"+resp.data[0].name+"</span>";
+                    layer.alert('已经发出申请！', {icon: 5});
+                }
+            },error:function () {//非公开群，用户没有权限查询 只能 知道ID
+                if(message.type=="invite"){//加入群组
+                    var tips = "你已加入群：<span>"+message.roomid+"</span>";
+                    layer.alert(tips, {icon: 1});
+                }else if(message.type=="leaveGroup"){// 退出群
+                    var tips = "你已退出群：<span>"+message.roomid+"</span>";
+                    layer.alert('已经发出申请！', {icon: 5});
+                }
+            }
+        };
+        easemobConn.getGroupInfo(groupInfoOptions);
+    }
+
     /**********************   添加群组结束  ************************/
 
 

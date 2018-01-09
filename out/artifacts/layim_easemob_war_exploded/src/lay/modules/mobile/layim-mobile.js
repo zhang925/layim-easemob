@@ -173,9 +173,16 @@ layui.define(['laytpl', 'upload-mobile', 'layer-mobile', 'zepto'], function(expo
     if(options.type === 'history'){
       options.item = options.item || 'd.sortHistory';
     }
-    
-    return ['{{# var length = 0; layui.each('+ options.item +', function(i, data){ length++; }}'
-      ,'<li layim-event="chat" data-type="'+ options.type +'" data-index="'+ (options.index ? '{{'+ options.index +'}}' : (options.type === 'history' ? '{{data.type}}' : options.type) +'{{data.id}}') +'" class="layim-'+ (options.type === 'history' ? '{{data.type}}' : options.type) +'{{data.id}} {{ data.status === "offline" ? "layim-list-gray" : "" }}"><div><img src="{{data.avatar}}"></div><span>{{ data.username||data.groupname||data.name||"佚名" }}</span><p>{{ data.remark||data.sign||"" }}</p><span class="layim-msg-status">new</span></li>'
+
+    var appendGroupIdHtml = "";
+      if(options.type === 'group'){ //如果是群组的换显示 群ID
+          //appendGroupIdHtml = '<span style="color: blue;font-size: 14px;" >{{ data.id}}</span>';
+          appendGroupIdHtml = '<input disabled="disabled" style="background-color: white;color: blue;font-size: 14px;border: 1px solid white;" value="{{ data.id}}" />';
+      }
+
+      return ['{{# var length = 0; layui.each('+ options.item +', function(i, data){ length++; }}'
+      ,'<li layim-event="chat" data-type="'+ options.type +'" data-index="'+ (options.index ? '{{'+ options.index +'}}' : (options.type === 'history' ? '{{data.type}}' : options.type) +'{{data.id}}') +'" class="layim-'+ (options.type === 'history' ? '{{data.type}}' : options.type) +'{{data.id}} {{ data.status === "offline" ? "layim-list-gray" : "" }}"><div><img src="{{data.avatar}}"></div><span>{{ data.username||data.groupname||data.name||"佚名" }}</span><p>{{ data.remark||data.sign||"" }}</p><span class="layim-msg-status">new</span>'
+         + appendGroupIdHtml +'</li>'
     ,'{{# }); if(length === 0){ }}'
       ,'<li class="layim-null">'+ (nodata[options.type] || "暂无数据") +'</li>'
     ,'{{# } }}'].join('');
@@ -1092,26 +1099,15 @@ layui.define(['laytpl', 'upload-mobile', 'layer-mobile', 'zepto'], function(expo
     
     //弹出新的朋友面板
     ,newFriend: function(){
-      /*layui.each(call.newFriend, function(index, item){
-        item && item();
-      });*/
-        /*popPanel({
-            //  &#xe61f; &#xe615;
-            title: '<input placeholder="搜索" id="searchUserInput" value="xf" style="background-color:#36373C;border: solid 1px black;border-bottom: solid 1px #00ff00;"  /><i class="layui-icon" id="searchUser"  onclick="addNewFriendUser()">添加为好友</i>'
-            ,tpl: ['<div class="layui-layim-list layim-list-group" id="showAddUserInfo" >' + //style="background-color: #EEEEEE;"
-            '请仔细确定要添加的用户'
-            +
-
-            '</div>'].join('')
-            ,data: {}
-        });*/
-
+          /*layui.each(call.newFriend, function(index, item){
+            item && item();
+          });*/
           popPanel({
               //  &#xe61f; &#xe615;
-              title: '添加新的朋友/群组'
+              title: '添加朋友/加入群组'
               ,tpl: ['<div class="layui-layim-list layim-list-group" id="showAddUserInfo" >'
               +
-               '<h2 onclick="appendAddNewFriend()" class="layui-colla-title" style="border: 1px solid #E2E2E2;">添加新朋友</h2>'
+              '<h2 onclick="appendAddNewFriend()" class="layui-colla-title" style="border: 1px solid #E2E2E2;">添加朋友</h2>'
               +'<div id="addNewFriend" ></div>'+
               '<h2 onclick="addNewGroup()"  class="layui-colla-title" style="border: 1px solid #E2E2E2;">加入群组</h2>'
               + '<div id="addNewGroup" ></div><div id="showGroupInfo" ></div>' +
@@ -1120,9 +1116,6 @@ layui.define(['laytpl', 'upload-mobile', 'layer-mobile', 'zepto'], function(expo
           });
 
     }
-    // listTpl
-
-
     
     //弹出群组面板
     ,group: function(){
