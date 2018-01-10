@@ -37,7 +37,7 @@
 
 			//全局环信链接，方便layim-mobile内部使用
 			var easemobConn;
-            var loginUser = prompt("请输入登录帐号", "wj"); //"wj";
+            var loginUser = prompt("请输入登录帐号", "xf"); // "xf"
             var layim;
 			layui.config({
 				version: true
@@ -297,9 +297,9 @@
                             //var detailTitle = data.groupname+"-"+data.id;
                             var detailTitle = data.groupname;
                             layim.panel({
-                                title: detailTitle//标题
+                                title: detailTitle +'<i onclick="moreGroupInfo(\''+data.id+'\')" class="layui-icon layim-chat-back" style="float: right;" >&#xe65f;</i>'
                                 , tpl: '<ul class="layim-list-top">\n' +
-                                (isOwner ? '<li layim-event="newMember"><i onclick="addUserFromGroup(\'{{item.member||item.owner}}\',\''+data.id+'\')" class="layui-icon">&#xe654;</i>新的成员</li>' : '') +
+                                (isOwner ? '<li layim-event="newMember"><span onclick="addUserFromGroup(\''+data.id+'\')"><i  class="layui-icon">&#xe654;</i>新的成员</li></span>' : '') +
                                 '{{# layui.each(d.data, function(index, item){ }}\n' +
                                 '  <li>\n' +
                                 '  <i style="font-size: 35px;" class="layui-icon">&#xe612;</i>' +
@@ -341,18 +341,88 @@
         layer = layui.layer;
     });
 
-    function removeUserFromGroup(removeuser,groupid) {//管理员从 群组中 踢出 人
+
+    //管理员从 群组中 踢出 人 或者 用户自己 退出群
+    function removeUserFromGroup(removeuser,groupid,self) {
         var tips = "是否将"+removeuser+"移除该群？";
+        if(self){ //用户自己退出群
+            tips = "确定要退出该群吗？"
+		}
         layer.confirm(tips, {
             btn: ['确定', '取消']
         }, function(index, layero){
-            layer.alert(removeuser+"已被移除该群！",{icon:5});
+            var option = {
+                to: removeuser,
+                roomId: groupid,
+                success: function () {
+                    if(self){//自己退出
+                        removeuser="你";
+                    }
+                    layim.removeList({
+                        type: 'group',  //或者group
+                        id: groupid //好友或者群组ID
+                    });
+                    layer.closeAll();
+                    layer.alert(removeuser+"已退出该群！",{icon:5});
+
+                },
+                error: function () {
+                    layer.msg('Leave room faild');
+                }
+            };
+            easemobConn.leaveGroupBySelf(option);
         });
     }
 
-    function addUserFromGroup(removeuser,groupid) {
-        layer.alert(removeuser+"已加入该群！",{icon:1});
+    // 群组中 加入 人
+    function addUserFromGroup(groupid) {
+        var addUserHtml="<div class='layui-form-item' style='margin: 10px;'>" +
+            "<label class='layui-form-label' style='text-align: center;'>用户：</label>" +
+            "<div class='layui-input-block'><input id='addUserFromGroupInput' class='layui-input'  style='margin: 5px;'/></div>" +
+            "<button class='layui-btn layui-btn-warm' style='margin: 5px;float: right;' onclick='layer.closeAll();'>关闭</button>" +
+            "<button class='layui-btn layui-btn-normal' style='margin: 5px;float: right;' onclick='doAddUserFromGroup(\""+groupid+"\")'>添加</button>" +
+            "</div>";
+        layer.open({
+            title: '用户入群',
+            type: 1,
+            closeBtn: 0,
+            content: addUserHtml
+        });
     }
+    function doAddUserFromGroup(groupid) {//处理 群组中 加入 人
+		var addUser = document.getElementById("addUserFromGroupInput").value;
+		if(addUser){
+            var addtips = "确定将" + addUser + "加入到该群吗？";
+            layer.confirm(addtips, {
+                btn: ['确定', '取消']
+            }, function(index, layero){
+                var option = {
+                    list: [addUser],
+                    roomId: groupid
+                };
+                easemobConn.addGroupMembers(option);
+                layer.msg("添加成功！");
+
+            });
+		}else{
+            layer.msg("请输入要添加的用户！");
+		}
+    }
+
+    function moreGroupInfo(groupid) {//当前用户 点击 群信息 的 ... 的时候 显示 退出群 等信息
+		var openHtml = "<div class='layui-anim-up' style='background-color: #EEEEEE;'>" +
+			"<div onclick='removeUserFromGroup(\""+loginUser+"\",\""+groupid+"\",\"self\")' style='text-align: center;padding-top: 5px;'>退出群</div><hr/>" +
+			"<div onclick='layer.closeAll();' style='text-align: center;padding-top: 5px;'>取消</div><br/>" +
+			"</div>";
+        layer.open({
+            title: '更多',
+            type: 1,
+            closeBtn: 0,
+            content: openHtml
+        });
+    }
+
+
 
     /**********************   好友添加开始  ************************/
 
@@ -360,13 +430,13 @@
     function appendAddNewFriend() {
         var appendHtmlflag = document.getElementById("searchUserInput");
         if(!appendHtmlflag){//说明是第一次点击
-            var appendHtml="<div class='layui-form-item' style='margin: 10px;'>" +
-                "<label class='layui-form-label'>用户：</label>" +
-                "<div class='layui-input-block'><input id='searchUserInput' class='layui-input'  style='margin: 5px;'/></div>" +
-                "<label class='layui-form-label'>验证信息：</label>" +
-                "<div class='layui-input-block'><input id='searchUserMeaage'  class='layui-input' style='margin: 5px;' /></div>"+
-                "<button class='layui-btn layui-btn-normal' style='margin: 5px;float: right;' onclick='addNewFriendUser()'>添加</button>" +
-                "</div>";
+				var appendHtml="<div class='layui-form-item' style='margin: 10px;'>" +
+					"<label class='layui-form-label'>用户：</label>" +
+					"<div class='layui-input-block'><input id='searchUserInput' class='layui-input'  style='margin: 5px;'/></div>" +
+					"<label class='layui-form-label'>验证信息：</label>" +
+					"<div class='layui-input-block'><input id='searchUserMeaage'  class='layui-input' style='margin: 5px;' /></div>"+
+					"<button class='layui-btn layui-btn-normal' style='margin: 5px;float: right;' onclick='addNewFriendUser()'>添加</button>" +
+					"</div>";
             $("#addNewFriend").append(appendHtml);
         }else{//第二次点击 实现折叠效果
             $("#addNewFriend").html("");
@@ -629,10 +699,26 @@
                 if(message.type=="invite"){//加入公开群组
                     var tips = "你已加入群：<span>"+resp.data[0].name+"</span>";
                     layer.alert(tips, {icon: 1});
+                    var groupAvatar = "images/group.jpg";
+                    layim.addList({
+                        type: 'group' //列表类型，只支持friend和group两种
+                        ,
+                        avatar: groupAvatar //群组头像
+                        ,
+                        groupname: resp.data[0].name //群组名称
+                        ,
+                        id: message.roomid //群组id
+                    })
                 }else if(message.type=="leaveGroup"){// 推出群
                     var tips = "你已退出群：<span>"+resp.data[0].name+"</span>";
-                    layer.alert('已经发出申请！', {icon: 5});
+                    layer.alert(tips, {icon: 5});
+                    layim.removeList({
+                        type: 'group',  //或者group
+                        id: message.roomid //好友或者群组ID
+                    });
+
                 }
+
             },error:function () {//非公开群，用户没有权限查询 只能 知道ID
                 if(message.type=="invite"){//加入群组
                     var tips = "你已加入群：<span>"+message.roomid+"</span>";

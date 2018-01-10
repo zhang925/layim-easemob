@@ -24,14 +24,12 @@
 </head>
 <body>
 
-<form class="layui-form" action="">
-    <div class="layui-form-item">
-        <label class="layui-form-label">输入框</label>
-        <div class="layui-input-block">
-            <input type="text" name="title" required  lay-verify="required" placeholder="请输入标题" autocomplete="off" class="layui-input">
-        </div>
-    </div>
-</form>
+其中 layui-anim 是必须的，后面跟着的即是不同的动画类
+<div class="layui-anim layui-anim-up">其中 layui-anim 是必须的，后面跟着的即是不同的动画类</div>
+
+循环动画，追加：layui-anim-loop
+<%--<div class="layui-anim layui-anim-up layui-anim-loop">循环动画，追加：layui-anim-loop</div>--%>
+
 
 <script>
     //Demo
