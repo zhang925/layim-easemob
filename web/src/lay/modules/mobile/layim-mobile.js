@@ -173,16 +173,8 @@ layui.define(['laytpl', 'upload-mobile', 'layer-mobile', 'zepto'], function(expo
         if(options.type === 'history'){
             options.item = options.item || 'd.sortHistory';
         }
-
-        var appendGroupIdHtml = "";
-        if(options.type === 'group'){ //如果是群组的换显示 群ID
-            //appendGroupIdHtml = '<span style="color: blue;font-size: 14px;" >{{ data.id}}</span>';
-            appendGroupIdHtml = '<input disabled="disabled" style="background-color: white;color: blue;font-size: 14px;border: 1px solid white;" value="{{ data.id}}" />';
-        }
-
         return ['{{# var length = 0; layui.each('+ options.item +', function(i, data){ length++; }}'
-            ,'<li layim-event="chat" data-type="'+ options.type +'" data-index="'+ (options.index ? '{{'+ options.index +'}}' : (options.type === 'history' ? '{{data.type}}' : options.type) +'{{data.id}}') +'" class="layim-'+ (options.type === 'history' ? '{{data.type}}' : options.type) +'{{data.id}} {{ data.status === "offline" ? "layim-list-gray" : "" }}"><div><img src="{{data.avatar}}"></div><span>{{ data.username||data.groupname||data.name||"佚名" }}</span><p>{{ data.remark||data.sign||"" }}</p><span class="layim-msg-status">new</span>'
-            + appendGroupIdHtml +'</li>'
+            ,'<li layim-event="chat" data-type="'+ options.type +'" data-index="'+ (options.index ? '{{'+ options.index +'}}' : (options.type === 'history' ? '{{data.type}}' : options.type) +'{{data.id}}') +'" class="layim-'+ (options.type === 'history' ? '{{data.type}}' : options.type) +'{{data.id}} {{ data.status === "offline" ? "layim-list-gray" : "" }}"><div style="position: absolute;left: 12px;top: 15px;width: 36px;height: 36px;border-radius: 100%"><i style="font-size: '+(options.type=='group'?'30':'35')+'px;" class="layui-icon">'+(options.type=='group'?'&#xe613;':'&#xe612;')+'</i></div><span>{{ data.username||data.groupname||data.name||"佚名" }}</span><p>{{ data.remark||data.sign||"" }}</p><span class="layim-msg-status">new</span></li>'
             ,'{{# }); if(length === 0){ }}'
             ,'<li class="layim-null">'+ (nodata[options.type] || "暂无数据") +'</li>'
             ,'{{# } }}'].join('');
@@ -222,7 +214,7 @@ layui.define(['laytpl', 'upload-mobile', 'layer-mobile', 'zepto'], function(expo
         ,'<div class="layim-tab-content">'
         ,'<ul class="layim-list-top">'
         ,'{{# if(d.base.isNewFriend){ }}'
-        ,'<li layim-event="newFriend"><i class="layui-icon">&#xe654;</i>新的朋友<i class="layim-new" id="LAY_layimNewFriend"></i></li>'
+        ,'<li layim-event="newFriend"><i class="layui-icon">&#xe654;</i>添加朋友/加入群组<i class="layim-new" id="LAY_layimNewFriend"></i></li>'
         ,'{{# } if(d.base.isgroup){ }}'
         ,'<li layim-event="group"><i class="layui-icon">&#xe613;</i>群聊<i class="layim-new" id="LAY_layimNewGroup"></i></li>'
         ,'{{# } }}'
@@ -231,7 +223,7 @@ layui.define(['laytpl', 'upload-mobile', 'layer-mobile', 'zepto'], function(expo
         ,'{{# layui.each(d.friend, function(index, item){ var spread = d.local["spread"+index]; }}'
         ,'<li>'
         ,'<h5 layim-event="spread" lay-type="{{ spread }}"><i class="layui-icon">{{# if(spread === "true"){ }}&#xe61a;{{# } else {  }}&#xe602;{{# } }}</i><span>{{ item.groupname||"未命名分组"+index }}</span><em>(<cite class="layim-count"> {{ (item.list||[]).length }}</cite>)</em></h5>'
-        ,'<ul class="layui-layim-list {{# if(spread === "true"){ }}'
+        ,'<ul class="layui-layim-list layui-show {{# if(spread === "true"){ }}'
         ,' layui-show'
         ,'{{# } }}">'
         ,listTpl({
@@ -344,7 +336,7 @@ layui.define(['laytpl', 'upload-mobile', 'layer-mobile', 'zepto'], function(expo
     };
 
     var elemChatMain = ['<li class="layim-chat-li{{ d.mine ? " layim-chat-mine" : "" }}">'
-        ,'<div class="layim-chat-user"><img src="{{ d.avatar }}"><cite>'
+        ,'<div class="layim-chat-user"><i style="font-size: 40px;" class="layui-icon">&#xe612;</i><cite>'
         ,'{{ d.username||"佚名" }}'
         ,'</cite></div>'
         ,'<div class="layim-chat-text">{{ layui.data.content(d.content||"&nbsp;") }}</div>'
@@ -1118,10 +1110,13 @@ layui.define(['laytpl', 'upload-mobile', 'layer-mobile', 'zepto'], function(expo
 
         //弹出群组面板
         ,group: function(){
+
+            var appendCreateGroupHtml = '<div onclick="creatGroup()" style="background-color: white;border-bottom: solid 1px #F2F2F2;height: 50px;"><i style="font-size: 35px;position: absolute;left: 12px;top: 15px;" class="layui-icon">&#xe654;</i><span style="float: left; position:absolute; left: 60px;top: 15px;font-size: 18px;">创建群</span></div>';
             popPanel({
                 title: '群聊'
-                ,tpl: ['<div class="layui-layim-list layim-list-group">'
-                    ,listTpl({
+                ,tpl: [appendCreateGroupHtml+ '<div id="groupListDiv" class="layui-layim-list layim-list-group">'
+                    ,
+                    listTpl({
                         type: 'group'
                         ,item: 'd.group'
                     })
